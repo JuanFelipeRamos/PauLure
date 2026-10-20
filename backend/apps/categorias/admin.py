@@ -3,4 +3,4 @@ from .models import Categorias
 
 @admin.register(Categorias)
 class CategoriasAdmin(admin.ModelAdmin):
-    list_display = ('nombre',)
+    list_display = ['id', 'nombre']
