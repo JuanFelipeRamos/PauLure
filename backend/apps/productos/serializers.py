@@ -3,12 +3,30 @@ from django.db import transaction
 from rest_framework import serializers
 from .models import Productos, SecuenciaReferencia, VarianteProducto
 
+class VarianteInputSerializer(serializers.Serializer):
+    nombre_tono = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    color_hex = serializers.CharField(
+        max_length=12,
+        required=False,
+        allow_null=True,
+        allow_blank=True
+    )
+
+    cantidad = serializers.IntegerField(min_value=0)
+
 class ProductosSerializers(serializers.ModelSerializer):
-    variantes_productos = serializers.JSONField(write_only=True)
+    variantes_productos = VarianteInputSerializer(many=True, write_only=True)
 
     class Meta:
         model = Productos
         fields = [
+            'id',
             'nombre',
             'descripcion',
             'precio',
@@ -52,10 +70,12 @@ class ProductosSerializers(serializers.ModelSerializer):
         instancia_producto = Productos.objects.create(**validated_data)
 
         for var in variantes:
+            nombre_tono = var.get('nombre_tono')
+
             VarianteProducto.objects.create(
                 producto_id = instancia_producto,
-                nombre_tono = var['nombre_tono'].capitalize(),
-                color_hex = var['color_hex'],
+                nombre_tono = nombre_tono.capitalize() if nombre_tono else None,
+                color_hex=var.get('color_hex'),
                 cantidad = var['cantidad']
             )
 
