@@ -1,4 +1,5 @@
 #pylint: disable=no-member
+import json
 from django.db import transaction
 from rest_framework import serializers
 from .models import Productos, SecuenciaReferencia, VarianteProducto
@@ -20,8 +21,28 @@ class VarianteInputSerializer(serializers.Serializer):
 
     cantidad = serializers.IntegerField(min_value=0)
 
+
+class VariantesJSONField(serializers.Field):
+    """acepta el arreglo como string JSON (form-data) o como lista real (JSON)."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except ValueError as exc:
+                raise serializers.ValidationError('debe ser un JSON válido.') from exc
+
+        serializer = VarianteInputSerializer(data=data, many=True, allow_empty=False)
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
+    def to_representation(self, value):
+        return value
+
+
 class ProductosSerializers(serializers.ModelSerializer):
-    variantes_productos = VarianteInputSerializer(many=True, write_only=True)
+    imgs = serializers.ImageField(required=False, allow_null=True)
+    variantes_productos = VariantesJSONField(write_only=True)
 
     class Meta:
         model = Productos
@@ -30,8 +51,9 @@ class ProductosSerializers(serializers.ModelSerializer):
             'nombre',
             'descripcion',
             'precio',
+            'imgs',
             'referencia',
-            'categoria_id',
+            'categoria',
             'fecha_creacion',
             'variantes_productos'
         ]
@@ -73,7 +95,7 @@ class ProductosSerializers(serializers.ModelSerializer):
             nombre_tono = var.get('nombre_tono')
 
             VarianteProducto.objects.create(
-                producto_id = instancia_producto,
+                producto = instancia_producto,
                 nombre_tono = nombre_tono.capitalize() if nombre_tono else None,
                 color_hex=var.get('color_hex'),
                 cantidad = var['cantidad']

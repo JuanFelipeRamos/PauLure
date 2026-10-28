@@ -3,7 +3,7 @@ from .models import Productos, SecuenciaReferencia, VarianteProducto
 
 @admin.register(Productos)
 class ProductosAdmin(admin.ModelAdmin):
-    list_display = ['id', 'nombre', 'precio', 'referencia', 'categoria_id', 'fecha_creacion']
+    list_display = ['id', 'nombre', 'precio', 'referencia', 'categoria', 'fecha_creacion']
 
 @admin.register(SecuenciaReferencia)
 class SecuenciaReferenciaAdmin(admin.ModelAdmin):
@@ -11,4 +11,4 @@ class SecuenciaReferenciaAdmin(admin.ModelAdmin):
 
 @admin.register(VarianteProducto)
 class VarianteProductoAdmin(admin.ModelAdmin):
-    list_display = ['id', 'producto_id', 'nombre_tono', 'color_hex', 'cantidad']
+    list_display = ['id', 'producto', 'nombre_tono', 'color_hex', 'cantidad']

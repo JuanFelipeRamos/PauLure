@@ -8,7 +8,7 @@ class Productos(models.Model):
     precio = models.DecimalField(max_digits=8, decimal_places=2)
     imgs = CloudinaryField('image', blank=True, null=True)
     referencia = models.CharField(max_length=15, blank=True, null=True, unique=True)
-    categoria_id = models.ForeignKey(Categorias, on_delete=models.CASCADE)
+    categoria = models.ForeignKey(Categorias, on_delete=models.CASCADE)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -25,7 +25,7 @@ class SecuenciaReferencia(models.Model):
 
 # tabla para administrar tonos y cantidades de productos
 class VarianteProducto(models.Model):
-    producto_id = models.ForeignKey(Productos, on_delete=models.CASCADE, blank=True, null=True)
+    producto = models.ForeignKey(Productos, on_delete=models.CASCADE, blank=True, null=True)
     nombre_tono = models.CharField(max_length=20, blank=True, null=True)
     color_hex = models.CharField(max_length=12, blank=True, null=True)
     cantidad = models.PositiveIntegerField()

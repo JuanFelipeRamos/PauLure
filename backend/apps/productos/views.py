@@ -9,9 +9,9 @@ class ProductosViewSet(viewsets.ModelViewSet):
     queryset = Productos.objects.all()
     serializer_class = ProductosSerializers
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['categoria_id']
+    filterset_fields = ['categoria']
     search_fields = ['nombre', 'referencia']
-    ordering_fields = ['fecha_creacion', 'categoria_id']
+    ordering_fields = ['fecha_creacion', 'categoria']
 
     # para eliminar un producto y mostrar un mensaje de éxito
     def destroy(self, request, *args, **kwargs):
