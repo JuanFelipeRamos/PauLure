@@ -6,7 +6,6 @@ class Productos(models.Model):
     nombre = models.CharField(max_length=30)
     descripcion = models.TextField()
     precio = models.DecimalField(max_digits=8, decimal_places=2)
-    imgs = CloudinaryField('image', blank=True, null=True)
     referencia = models.CharField(max_length=15, blank=True, null=True, unique=True)
     categoria = models.ForeignKey(Categorias, on_delete=models.CASCADE)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -15,6 +14,16 @@ class Productos(models.Model):
         verbose_name = 'Producto'
         verbose_name_plural = 'Productos'
 
+
+class ImagenProducto(models.Model):
+    producto = models.ForeignKey(Productos, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = CloudinaryField('image')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden']
+
+
 # tabla para llevar el control de la secuencia de las referencias de los productos
 class SecuenciaReferencia(models.Model):
     ultimo_numero = models.PositiveIntegerField(default=0)
@@ -22,6 +31,7 @@ class SecuenciaReferencia(models.Model):
     class Meta:
         verbose_name = 'Secuencia de referencia'
         verbose_name_plural = 'Secuencias de referencias'
+
 
 # tabla para administrar tonos y cantidades de productos
 class VarianteProducto(models.Model):
