@@ -7,7 +7,7 @@ class Productos(models.Model):
     descripcion = models.TextField()
     precio = models.DecimalField(max_digits=8, decimal_places=2)
     referencia = models.CharField(max_length=15, blank=True, null=True, unique=True)
-    categoria = models.ForeignKey(Categorias, on_delete=models.CASCADE)
+    categoria = models.ForeignKey(Categorias, on_delete=models.PROTECT)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:

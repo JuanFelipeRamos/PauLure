@@ -32,6 +32,6 @@ class VarianteProductoViewset(viewsets.ModelViewSet):
         # verifica si es la última variante del producto
         if VarianteProducto.objects.filter(producto=instance.producto).count() <= 1:
             raise ValidationError(
-                "No se puede eliminar la última variante del producto."
+                "no se puede eliminar la última variante del producto."
             )
         instance.delete()
