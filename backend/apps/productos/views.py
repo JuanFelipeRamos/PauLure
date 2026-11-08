@@ -1,10 +1,11 @@
 #pylint: disable=no-member
 from rest_framework import viewsets
+from django.db import transaction
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from .serializers import ProductosSerializers, VarianteProductoSerializer
 from .models import Productos, VarianteProducto
+from .utils import borrar_imagen_cloudinary
 
 class ProductosViewSet(viewsets.ModelViewSet):
     queryset = Productos.objects.all()
@@ -14,14 +15,14 @@ class ProductosViewSet(viewsets.ModelViewSet):
     search_fields = ['nombre', 'referencia']
     ordering_fields = ['fecha_creacion', 'categoria']
 
-    # para eliminar un producto y mostrar un mensaje de éxito
-    def destroy(self, request, *args, **kwargs):
-        producto = self.get_object()
+    # para eliminar las imágenes de cloudinary al borrar un producto
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        public_ids = [img.imagen.public_id for img in instance.imagenes.all()]
+        instance.delete()
 
-        self.perform_destroy(producto)
-        return Response({
-            "message": "producto eliminado exitosamente"
-        })
+        for pid in public_ids:
+            transaction.on_commit(lambda pid=pid: borrar_imagen_cloudinary(pid))
 
 class VarianteProductoViewset(viewsets.ModelViewSet):
     queryset = VarianteProducto.objects.all()
