@@ -3,7 +3,10 @@ import json
 from django.db import transaction
 from rest_framework import serializers
 from .models import Productos, SecuenciaReferencia, VarianteProducto, ImagenProducto
-from .utils import borrar_imagen_cloudinary, crear_imagenes
+from .utils import (primera_mayuscula, borrar_imagen_cloudinary, crear_imagenes, crear_variantes)
+
+MIN_IMAGENES = 2
+MAX_IMAGENES = 3
 
 class VarianteInputSerializer(serializers.Serializer):
     nombre_tono = serializers.CharField(
@@ -41,6 +44,13 @@ class VariantesJSONField(serializers.Field):
         return value
 
 
+# para peticiones GET, PATCH Y DELETE
+class VarianteProductoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VarianteProducto
+        fields = ['id', 'nombre_tono', 'color_hex', 'cantidad']
+
+
 # para mostrar las imágenes
 class ImagenProductoSerializer(serializers.ModelSerializer):
     imagen = serializers.ImageField(read_only=True)
@@ -51,18 +61,15 @@ class ImagenProductoSerializer(serializers.ModelSerializer):
 
 
 class ProductosSerializers(serializers.ModelSerializer):
+    variantes = VarianteProductoSerializer(many=True, read_only=True)
+
     imgs = serializers.ListField(
         child=serializers.ImageField(),
-        min_length=2,
-        max_length=3,
+        max_length=MAX_IMAGENES,
         write_only=True,
     )
     imagenes = ImagenProductoSerializer(many=True, read_only=True)
-    id_img = serializers.ListField(
-        child=serializers.IntegerField(),
-        required=False,
-        write_only=True
-    )
+    orden_imagenes = serializers.JSONField(required=False, write_only=True)
     variantes_productos = VariantesJSONField(write_only=True)
 
     class Meta:
@@ -74,17 +81,70 @@ class ProductosSerializers(serializers.ModelSerializer):
             'precio',
             'imgs',
             'imagenes',
-            'id_img',
+            'orden_imagenes',
             'referencia',
             'categoria',
             'fecha_creacion',
-            'variantes_productos'
+            'variantes_productos',
+            'variantes'
         ]
 
         extra_kwargs = {
             'referencia': {'read_only': True},
             'fecha_creacion': {'read_only': True}
         }
+
+    def validate_nombre(self, value):
+        return primera_mayuscula(value.strip())
+
+    def validate_descripcion(self, value):
+        return primera_mayuscula(value.strip())
+
+    def validate_imgs(self, value):
+        if self.instance is None and len(value) < MIN_IMAGENES:
+            raise serializers.ValidationError(
+                f'Debes enviar al menos {MIN_IMAGENES} imágenes.'
+            )
+        return value
+
+    def validate_orden_imagenes(self, value):
+        es_valido = isinstance(value, list) and all(
+            x == 'nueva' or (isinstance(x, int) and not isinstance(x, bool))
+            for x in value
+        )
+        if not es_valido:
+            raise serializers.ValidationError('Debe ser una lista de ids enteros y/o "nueva".')
+        return value
+
+    def validate(self, attrs):
+        if self.instance is None:
+            return attrs
+
+        archivos = attrs.get('imgs', None)
+        orden = attrs.get('orden_imagenes')
+
+        if orden is None:
+            if archivos:
+                raise serializers.ValidationError(
+                    {'orden_imagenes': 'Es obligatorio cuando se envían imágenes.'}
+                )
+            return attrs
+
+        conservar = [x for x in orden if x != 'nueva']
+        actuales = set(self.instance.imagenes.values_list('id', flat=True))
+        nuevas_count = orden.count('nueva')
+
+        if not MIN_IMAGENES <= len(orden) <= MAX_IMAGENES:
+            msg = f'El producto debe quedar con entre {MIN_IMAGENES} y {MAX_IMAGENES} imágenes.'
+        elif len(conservar) != len(set(conservar)):
+            msg = 'Hay ids repetidos.'
+        elif not set(conservar) <= actuales:
+            msg = 'Hay ids que no pertenecen a este producto.'
+        elif nuevas_count > 0 and (archivos is None or len(archivos) != nuevas_count):
+            msg = f'Se esperan {nuevas_count} archivos nuevos en "imgs", pero se recibieron {len(archivos) if archivos else 0}.'
+        else:
+            return attrs
+        raise serializers.ValidationError({'orden_imagenes': msg})
 
     @transaction.atomic
     def create(self, validated_data):
@@ -102,28 +162,14 @@ class ProductosSerializers(serializers.ModelSerializer):
 
         validated_data['referencia'] = f'PAU-{prefijo}-{numero_formateado}'
 
-        # poner la primera letra del nombre y la descripción en mayúscula
-        nombre_mayus = validated_data['nombre'].capitalize()
-        validated_data['nombre'] = nombre_mayus
-
-        descripcion_mayus = validated_data['descripcion'].capitalize()
-        validated_data['descripcion'] = descripcion_mayus
-
         # crear registros de las variantes de productos (tonos y cantidades)
         variantes = validated_data.pop('variantes_productos')
-        imagenes = validated_data.pop('imgs', [])
+        validated_data.pop('orden_imagenes', None)
+        imagenes = validated_data.pop('imgs', None)
 
         instancia_producto = Productos.objects.create(**validated_data)
 
-        for var in variantes:
-            nombre_tono = var.get('nombre_tono')
-
-            VarianteProducto.objects.create(
-                producto = instancia_producto,
-                nombre_tono = nombre_tono.capitalize() if nombre_tono else None,
-                color_hex=var.get('color_hex'),
-                cantidad = var['cantidad']
-            )
+        crear_variantes(instancia_producto, variantes)
 
         crear_imagenes(instancia_producto, imagenes)
 
@@ -131,33 +177,48 @@ class ProductosSerializers(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        imagenes = validated_data.pop('imgs', None)
-        ids = validated_data.pop('id_img', None)
+        archivos = validated_data.pop('imgs', None)
+        orden = validated_data.pop('orden_imagenes', None)
+        variantes = validated_data.pop('variantes_productos', None)
 
-        # para editar imágenes (TODAS, HAY QUE HACER PARA PODER EDITAR UNA SOLA) de un producto
-        if imagenes is not None:
-            # obtiene el public_id de cada imagen actual del producto
-            anteriores = [img.imagen.public_id for img in instance.imagenes.all()]
+        instance = super().update(instance, validated_data)
 
-            # borra de MySQL las imágenes viejas
-            instance.imagenes.all().delete()
+        if variantes is not None:
+            crear_variantes(instance, variantes)
 
-            crear_imagenes(instance, imagenes)
-
-            for public_id in anteriores:
-                transaction.on_commit(lambda pid=public_id: borrar_imagen_cloudinary(pid))
-
-        # para editar el orden de las imágenes de un producto
-        if ids is not None:
+        if orden is not None:
             actuales = {img.id: img for img in instance.imagenes.all()}
 
-            if len(ids) != len(set(ids)) or set(ids) != set(actuales):
-                raise serializers.ValidationError({
-                    'id_img': 'Debe incluir exactamente las imágenes actuales, sin repetir.'
-                })
+            # las que no aparecen en la lista se eliminan
+            a_borrar = [img for img_id, img in actuales.items() if img_id not in orden]
+            public_ids = [img.imagen.public_id for img in a_borrar]
+            for img in a_borrar:
+                img.delete()
 
-            for orden, id_img in enumerate(ids):
-                actuales[id_img].orden = orden
-            ImagenProducto.objects.bulk_update(actuales.values(), ['orden'])
+            if 'nueva' in orden:
+                if archivos is None:
+                    raise serializers.ValidationError(
+                        {'imgs': 'Se requieren archivos cuando se usa "nueva" en el orden.'}
+                    )
+                nuevos = iter(archivos)
+            else:
+                nuevos = None  # no hay imágenes nuevas
+
+            conservadas = []
+
+            for posicion, item in enumerate(orden):
+                if item == 'nueva':
+                    ImagenProducto.objects.create(
+                        producto=instance, imagen=next(nuevos), orden=posicion
+                    )
+                else:
+                    actuales[item].orden = posicion
+                    conservadas.append(actuales[item])
+
+            ImagenProducto.objects.bulk_update(conservadas, ['orden'])
+
+            # Cloudinary se borra solo si MySQL confirmó todo
+            for pid in public_ids:
+                transaction.on_commit(lambda pid=pid: borrar_imagen_cloudinary(pid))
 
         return instance

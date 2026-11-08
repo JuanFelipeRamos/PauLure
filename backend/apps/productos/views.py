@@ -2,8 +2,9 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .serializers import ProductosSerializers
-from .models import Productos
+from rest_framework.exceptions import ValidationError
+from .serializers import ProductosSerializers, VarianteProductoSerializer
+from .models import Productos, VarianteProducto
 
 class ProductosViewSet(viewsets.ModelViewSet):
     queryset = Productos.objects.all()
@@ -21,3 +22,16 @@ class ProductosViewSet(viewsets.ModelViewSet):
         return Response({
             "message": "producto eliminado exitosamente"
         })
+
+class VarianteProductoViewset(viewsets.ModelViewSet):
+    queryset = VarianteProducto.objects.all()
+    serializer_class = VarianteProductoSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        # verifica si es la última variante del producto
+        if VarianteProducto.objects.filter(producto=instance.producto).count() <= 1:
+            raise ValidationError(
+                "No se puede eliminar la última variante del producto."
+            )
+        instance.delete()

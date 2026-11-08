@@ -35,7 +35,7 @@ class SecuenciaReferencia(models.Model):
 
 # tabla para administrar tonos y cantidades de productos
 class VarianteProducto(models.Model):
-    producto = models.ForeignKey(Productos, on_delete=models.CASCADE, blank=True, null=True)
+    producto = models.ForeignKey(Productos, on_delete=models.CASCADE, blank=True, null=True, related_name='variantes')
     nombre_tono = models.CharField(max_length=20, blank=True, null=True)
     color_hex = models.CharField(max_length=12, blank=True, null=True)
     cantidad = models.PositiveIntegerField()
