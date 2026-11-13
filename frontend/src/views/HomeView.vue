@@ -1,14 +1,9 @@
 <script setup>
-import NavbarComponent from '@/components/NavbarComponent.vue';
 
 </script>
 
 <template>
-  <main>
-    <nav>
-      <NavbarComponent />
-    </nav>
-  </main>
+    <section></section>
 </template>
 
 <style scoped>

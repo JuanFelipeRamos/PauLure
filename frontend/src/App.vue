@@ -1,12 +1,14 @@
 <script setup>
 import NavbarComponent from './components/NavbarComponent.vue';
 
+const excludedRoutes = ['loginadmin', 'homepaneladmin']
+
 </script>
 
 <template>
   <div id="app">
     <header>
-      <NavbarComponent />
+      <NavbarComponent v-if="!excludedRoutes.includes($route.name)" />
     </header>
   
     <main>
